@@ -1,0 +1,131 @@
+---
+title: "Analysis of NOAA"
+author: "Jaya Shankar G S"
+output: html_document
+---
+### Impact of Storms and Severe Weather Events on Public Health and Economy consequences in the United States
+
+## Synonpsis  
+In this report, we aim to analyze the impact of different weather events on public health and economy based on the storm database collected from the U.S. National Oceanic and Atmospheric Administration's (NOAA) . We will use the estimates of fatalities, injuries, property and crop damage to decide which types of event are most harmful to the population health and economy. From these data, we found that excessive heat and tornado are most harmful with respect to population health, while flood, drought have the greatest economic consequences across the United States
+
+
+
+## Basic settings
+```{r,echo=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+```
+
+##  Data Processing 
+Here, we download the data and loading into a variable `storm_data`
+```{r}
+if(!file.exists("StormData.csv.bz2"))
+{
+  download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2",destfile = "/home/adler-jai/Documents/NOAA_document_analysis/StormData.csv.bz2")
+}
+```
+We have  902297 rows and 37 columns in total and these are the first 6 observations
+```{r,cache=TRUE}
+storm_data <- read.csv("StormData.csv.bz2")
+  dim(storm_data)
+  head(storm_data)
+```
+
+
+## Analysis of Weather Events on Public Health
+In this code chunk we take top 10 events that are responsible for causing severe damage on public health.
+In our data we have **FATALITIES** and **INJURIES** are variables that are recorded the public health damage,
+using these variables we find the events that are dangerous.
+```{r, cache=TRUE}
+agg1 <- aggregate(INJURIES~EVTYPE,FUN = sum,data = storm_data)
+agg2 <- aggregate(FATALITIES~EVTYPE,FUN = sum, data = storm_data)
+evinj <- filter(agg1, INJURIES != 0)
+evfat <- filter(agg2, FATALITIES != 0)
+fatalities <- arrange(evfat, desc(FATALITIES))[1:10,]
+injuries <- arrange(evinj, desc(INJURIES))[1:10,]
+```
+
+## Analysis of Weather Events on Economy
+The data `storm_data`  consists the variables `CROPDMGEXP` and `PROPDMGEXP` describes the multiplier to 
+`CROPDMG` and  `PROPDMG` which is described in ([storm documentation](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf)).
+That is Hundreds(H),Thousands(K),Millions(M) and Billions(B).\n
+Example : If we have 5 in `CROPDMG` and M in `CROPDMGEXP` then the total is 5 millions.\n
+Like this we filter the data and  takes the top 15 events affects most to economy. 
+```{r, cache=TRUE}
+prop_dmg <- filter(select(storm_data,EVTYPE,PROPDMG,PROPDMGEXP),PROPDMG != 0)
+crop_dmg <- filter(select(storm_data,EVTYPE,CROPDMG,CROPDMGEXP),CROPDMG != 0)
+datahelper <- function(dataset){
+dataset <- filter(dataset, dataset[,3] == "B" |dataset[,3] == "M"|dataset[,3] == "K"|dataset[,3] == "H" )
+dataset[,3][toupper(dataset[,3]) == "B"] <- 10^9  
+dataset[,3][toupper(dataset[,3])== "M"] <- 10^6  
+dataset[,3][toupper(dataset[,3]) == "K"] <- 1000  
+dataset[,3][toupper(dataset[,3]) == "H"] <- 100
+dataset[,3][toupper(dataset[,3]) == ""] <- 0  
+dataset$total <- dataset[,2] * as.numeric(dataset[,3])
+return(dataset)
+}
+property <- datahelper(prop_dmg)
+crop <- datahelper(crop_dmg)
+propagg <- aggregate(total ~ EVTYPE,data = property,FUN = sum)
+cropagg <- aggregate(total ~ EVTYPE,data = crop,FUN = sum)
+evprop <-arrange(propagg, desc(total))[1:15,]
+evcrop <- arrange(cropagg,desc(total))[1:15,]
+```
+
+## Results
+Finally, we got the event type in two variables which affected the public badly. 
+```{r}
+fatalities
+injuries
+```
+Now, we are plotting the results.\n
+From the both plot we can say that **TORNADO** and **EXCESSIVE HEAT** are highly affected to the public health.
+```{r, cache=TRUE}
+fatal <- qplot(EVTYPE, data = fatalities, weight = FATALITIES, geom = "bar") + 
+  ylab("Number of Fatalities") + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab("Severe Weather Type") + 
+  ggtitle("Total Fatalities by Severe Weather Events")
+
+injur <- qplot(EVTYPE, data = injuries, weight = INJURIES, geom = "bar") + 
+  ylab("Number of Fatalities") + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab("Severe Weather Type") + 
+  ggtitle("Total Injuries by Severe Weather Events")
+ 
+ grid.arrange(fatal,injur, ncol = 2)
+```
+
+Now let us see how the weather events affected the economy.\n
+We stored the top events affected to economy in variables `evprop` and `evcrop`.
+**Property Damage** in Dollars
+```{r}
+evprop
+```
+**Crop Damage** in Dollars
+```{r}
+evcrop
+```
+
+Plots of **Property Damage** and **Crop Damage**
+
+```{r, cache=TRUE}
+prop <- qplot(x = EVTYPE,weight = total,data = evprop,geom = "bar") + 
+  ylab("Total Property damage") + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  xlab("Severe Weather Type") + 
+  ggtitle("Total property damage by Severe Weather Events")
+
+crops <- qplot(x  = EVTYPE, weight = total, data = evcrop, geom = "bar") + 
+  ylab("Total Crop Damage ") + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  xlab("Severe Weather Type") + 
+  ggtitle("Total crop damage by Severe Weather Events")
+
+grid.arrange(prop,crops, ncol = 2)
+```
+
+As we can see, from above plots **FLOOD**,**HURRICANE/TYPHOON**,**TORNADO** and **STORM SURGE** are the events
+most affected to property damage , while  **DROUGHT**,**FLOOD**,**ICE STORM** and **RIVERFLOOD** are the events affected to crop damage. 
+But **DROUGHT** and **FLOOD** are the two events affected most to economy across the United States.
+
